@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kamn Enterprises - Solar Plant Installation</title>
+    <link rel="stylesheet" href="./css/style.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <i class="fas fa-solar-panel"></i>
+                <h1>Kamn Enterprises - Plant Installation</h1>
+            </div>
+            <div class="controls">
+                <button class="btn btn-primary" id="submitAll">
+                    <i class="fas fa-check-circle"></i> Submit All
+                </button>
+                <button class="btn btn-danger" id="clearAll">
+                    <i class="fas fa-trash-alt"></i> Clear All
+                </button>
+            </div>
+        </header>
+
+        <div id="mainContent">
+            <section class="customer-details" id="customerFormSection">
+                <h2><i class="fas fa-user"></i> Customer Details</h2>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="required">Name</label>
+                        <input
+                            type="text"
+                            id="customerName"
+                            placeholder="Enter customer name"
+                            required
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label class="required">District</label>
+                        <input type="text" id="district" placeholder="Enter district" required />
+                    </div>
+                    <div class="form-group">
+                        <label class="required">Plant Type</label>
+                        <select id="plantType" required>
+                            <option value="">Select plant type</option>
+                            <option value="3kw">3kW System</option>
+                            <option value="4kw">4kW System</option>
+                            <option value="5kw">5kW System</option>
+                            <option value="5kw">6kW System</option>
+                            <option value="5kw">8kW System</option>
+                            </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="required">Mobile Number</label>
+                        <input type="tel" id="mobile" placeholder="Enter mobile number" required />
+                    </div>
+                    <div class="form-group">
+                        <label class="required">Address</label>
+                        <input type="text" id="address" placeholder="Enter address" required />
+                    </div>
+                    <div class="section-controls">
+                        <button class="btn btn-primary btn-sm" id="createCustomerBtn">
+                            <i class="fa-solid fa-plus"></i> Create
+                        </button>
+                        <button class="btn btn-info btn-sm" id="addExistingCustomerBtn">
+                            <i class="fa-solid fa-folder-plus"></i> Add Existing
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="customer-details customer-display" id="customerDisplaySection">
+                <h2><i class="fas fa-user"></i> Current Customer</h2>
+                <div class="customer-info-display">
+                    <p><strong>Name:</strong> <span id="displayCustomerName"></span></p>
+                    <p><strong>District:</strong> <span id="displayDistrict"></span></p>
+                    <p><strong>Plant Type:</strong> <span id="displayPlantType"></span></p>
+                    <p><strong>Mobile:</strong> <span id="displayMobile"></span></p>
+                </div>
+                <button class="btn btn-secondary btn-sm" id="changeCustomerBtn">
+                    <i class="fas fa-edit"></i> Change Customer
+                </button>
+            </section>
+
+            <div id="photoSections" class="hidden">
+                <section class="photo-section" data-section-id="module">
+                    <div class="section-header">
+                        <h2><i class="fas fa-solar-panel"></i> Module Photos</h2>
+                        <div class="status status-pending">Pending</div>
+                    </div>
+                    <div class="photo-grid">
+                        <div class="photo-upload">
+                            <div class="photo-label">Side View</div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                class="file-input"
+                                id="moduleSide"
+                                data-photo-type="Side View"
+                            />
+                            <label for="moduleSide" class="file-label">
+                                <i class="fas fa-camera"></i>
+                                <span>Tap to capture</span>
+                            </label>
+                            <div class="preview-container">
+                                <img class="preview" />
+                                <button class="remove-btn"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        <div class="photo-upload">
+                            <div class="photo-label">Front View</div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                class="file-input"
+                                id="moduleFront"
+                                data-photo-type="Front View"
+                            />
+                            <label for="moduleFront" class="file-label">
+                                <i class="fas fa-camera"></i>
+                                <span>Tap to capture</span>
+                            </label>
+                            <div class="preview-container">
+                                <img class="preview" />
+                                <button class="remove-btn"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        <div class="photo-upload">
+                            <div class="photo-label">Bottom View</div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                class="file-input"
+                                id="moduleBottom"
+                                data-photo-type="Bottom View"
+                            />
+                            <label for="moduleBottom" class="file-label">
+                                <i class="fas fa-camera"></i>
+                                <span>Tap to capture</span>
+                            </label>
+                            <div class="preview-container">
+                                <img class="preview" />
+                                <button class="remove-btn"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        <div class="photo-upload">
+                            <div class="photo-label">Customer Photo with Panel</div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                class="file-input"
+                                id="moduleCustomer"
+                                data-photo-type="Customer Photo with Panel"
+                            />
+                            <label for="moduleCustomer" class="file-label">
+                                <i class="fas fa-camera"></i>
+                                <span>Tap to capture</span>
+                            </label>
+                            <div class="preview-container">
+                                <img class="preview" />
+                                <button class="remove-btn"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="section-controls">
+                        <button class="btn btn-primary btn-sm submit-section" data-section-id="module">
+                            <i class="fas fa-upload"></i> Submit Section
+                        </button>
+                        <button class="btn btn-danger btn-sm clear-section">
+                            <i class="fas fa-times"></i> Clear Section
+                        </button>
+                    </div>
+                </section>
+
+                <section class="photo-section" data-section-id="inverter">
+                    <div class="section-header">
+                        <h2><i class="fas fa-bolt"></i> Inverter Photos</h2>
+                        <div class="status status-pending">Pending</div>
+                    </div>
+                    <div class="photo-grid">
+                        <div class="photo-upload">
+                            <div class="photo-label">Consumer Photo with Inverter</div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                class="file-input"
+                                id="inverterConsumer"
+                                data-photo-type="Consumer Photo with Inverter"
+                            />
+                            <label for="inverterConsumer" class="file-label">
+                                <i class="fas fa-camera"></i>
+                                <span>Tap to capture</span>
+                            </label>
+                            <div class="preview-container">
+                                <img class="preview" />
+                                <button class="remove-btn"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        <div class="photo-upload">
+                            <div class="photo-label">Inverter Earthing</div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                class="file-input"
+                                id="inverterPhoto"
+                                data-photo-type="Inverter Photo"
+                            />
+                            <label for="inverterPhoto" class="file-label">
+                                <i class="fas fa-camera"></i>
+                                <span>Tap to capture</span>
+                            </label>
+                            <div class="preview-container">
+                                <img class="preview" />
+                                <button class="remove-btn"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        <div class="photo-upload">
+                            <div class="photo-label">Inverter S.No.</div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                class="file-input"
+                                id="inverterSerial"
+                                data-photo-type="Inverter S.No."
+                            />
+                            <label for="inverterSerial" class="file-label">
+                                <i class="fas fa-camera"></i>
+                                <span>Tap to capture</span>
+                            </label>
+                            <div class="preview-container">
+                                <img class="preview" />
+                                <button class="remove-btn"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        <div class="photo-upload">
+                            <div class="photo-label">Full Photo</div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                class="file-input"
+                                id="inverterFull"
+                                data-photo-type="Full Photo"
+                            />
+                            <label for="inverterFull" class="file-label">
+                                <i class="fas fa-camera"></i>
+                                <span>Tap to capture</span>
+                            </label>
+                            <div class="preview-container">
+                                <img class="preview" />
+                                <button class="remove-btn"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="section-controls">
+                        <button class="btn btn-primary btn-sm submit-section" data-section-id="inverter">
+                            <i class="fas fa-upload"></i> Submit Section
+                        </button>
+                        <button class="btn btn-danger btn-sm clear-section">
+                            <i class="fas fa-times"></i> Clear Section
+                        </button>
+                    </div>
+                </section>
+
+                <section class="photo-section" data-section-id="la">
+                    <div class="section-header">
+                        <h2><i class="fas fa-cloud-bolt"></i> Lightning Arrestor</h2>
+                        <div class="status status-pending">Pending</div>
+                    </div>
+                    <div class="photo-grid">
+                        <div class="photo-upload">
+                            <div class="photo-label">LA Photo</div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                class="file-input"
+                                id="laPhoto"
+                                data-photo-type="LA Photo"
+                            />
+                            <label for="laPhoto" class="file-label">
+                                <i class="fas fa-camera"></i>
+                                <span>Tap to capture</span>
+                            </label>
+                            <div class="preview-container">
+                                <img class="preview" />
+                                <button class="remove-btn"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="section-controls">
+                        <button class="btn btn-primary btn-sm submit-section" data-section-id="la">
+                            <i class="fas fa-upload"></i> Submit Section
+                        </button>
+                        <button class="btn btn-danger btn-sm clear-section">
+                            <i class="fas fa-times"></i> Clear Section
+                        </button>
+                    </div>
+                </section>
+
+                <section class="photo-section" data-section-id="earthing">
+                    <div class="section-header">
+                        <h2><i class="fas fa-plug-circle-bolt"></i> Earthing </h2>
+                        <div class="status status-pending">Pending</div>
+                    </div>
+                    <div class="photo-grid">
+                        <div class="photo-upload">
+                            <div class="photo-label">Internal Earthing 1</div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                class="file-input"
+                                id="earthing1"
+                                data-photo-type="Internal Earthing 1"
+                            />
+                            <label for="earthing1" class="file-label">
+                                <i class="fas fa-camera"></i>
+                                <span>Tap to capture</span>
+                            </label>
+                            <div class="preview-container">
+                                <img class="preview" />
+                                <button class="remove-btn"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        <div class="photo-upload">
+                            <div class="photo-label">Internal Earthing 2</div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                class="file-input"
+                                id="earthing2"
+                                data-photo-type="Internal Earthing 2"
+                            />
+                            <label for="earthing2" class="file-label">
+                                <i class="fas fa-camera"></i>
+                                <span>Tap to capture</span>
+                            </label>
+                            <div class="preview-container">
+                                <img class="preview" />
+                                <button class="remove-btn"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        <div class="photo-upload">
+                            <div class="photo-label">Internal Earthing 3</div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                class="file-input"
+                                id="earthing3"
+                                data-photo-type="Internal Earthing 2"
+                            />
+                            <label for="earthing3" class="file-label">
+                                <i class="fas fa-camera"></i>
+                                <span>Tap to capture</span>
+                            </label>
+                            <div class="preview-container">
+                                <img class="preview" />
+                                <button class="remove-btn"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        
+                    </div>
+                    <div class="section-controls">
+                        <button class="btn btn-primary btn-sm submit-section" data-section-id="earthing">
+                            <i class="fas fa-upload"></i> Submit Section
+                        </button>
+                        <button class="btn btn-danger btn-sm clear-section">
+                            <i class="fas fa-times"></i> Clear Section
+                        </button>
+                    </div>
+                </section>
+
+                <section class="photo-section" data-section-id="acdb">
+                    <div class="section-header">
+                        <h2><i class="fas fa-gauge-high"></i> ACDB</h2>
+                        <div class="status status-pending">Pending</div>
+                    </div>
+                    <div class="photo-grid">
+                        <div class="photo-upload">
+                            <div class="photo-label">ACDB Internal with Lug & sleeve</div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                class="file-input"
+                                id="acdbInternal"
+                                data-photo-type="ACDB Internal"
+                            />
+                            <label for="acdbInternal" class="file-label">
+                                <i class="fas fa-camera"></i>
+                                <span>Tap to capture</span>
+                            </label>
+                            <div class="preview-container">
+                                <img class="preview" />
+                                <button class="remove-btn"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        <!-- <div class="photo-upload">
+                            <div class="photo-label">ACDB External</div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                class="file-input"
+                                id="acdbExternal"
+                                data-photo-type="ACDB External"
+                            />
+                            <label for="acdbExternal" class="file-label">
+                                <i class="fas fa-camera"></i>
+                                <span>Tap to capture</span>
+                            </label>
+                            <div class="preview-container">
+                                <img class="preview" />
+                                <button class="remove-btn"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div> -->
+                    </div>
+                    <div class="section-controls">
+                        <button class="btn btn-primary btn-sm submit-section" data-section-id="acdb">
+                            <i class="fas fa-upload"></i> Submit Section
+                        </button>
+                        <button class="btn btn-danger btn-sm clear-section">
+                            <i class="fas fa-times"></i> Clear Section
+                        </button>
+                    </div>
+                </section>
+
+                <section class="photo-section" data-section-id="dcdb">
+                    <div class="section-header">
+                        <h2><i class="fas fa-gauge"></i> DCDB</h2>
+                        <div class="status status-pending">Pending</div>
+                    </div>
+                    <div class="photo-grid">
+                        <div class="photo-upload">
+                            <div class="photo-label">DCDB Internal with Lug & sleeve</div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                class="file-input"
+                                id="dcdbInternal"
+                                data-photo-type="DCDB Internal"
+                            />
+                            <label for="dcdbInternal" class="file-label">
+                                <i class="fas fa-camera"></i>
+                                <span>Tap to capture</span>
+                            </label>
+                            <div class="preview-container">
+                                <img class="preview" />
+                                <button class="remove-btn"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        <!-- <div class="photo-upload">
+                            <div class="photo-label">DCDB External</div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                class="file-input"
+                                id="dcdbExternal"
+                                data-photo-type="DCDB External"
+                            />
+                            <label for="dcdbExternal" class="file-label">
+                                <i class="fas fa-camera"></i>
+                                <span>Tap to capture</span>
+                            </label>
+                            <div class="preview-container">
+                                <img class="preview" />
+                                <button class="remove-btn"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div> -->
+                        
+                    </div>
+                    <div class="section-controls">
+                        <button class="btn btn-primary btn-sm submit-section" data-section-id="dcdb">
+                            <i class="fas fa-upload"></i> Submit Section
+                        </button>
+                        <button class="btn btn-danger btn-sm clear-section">
+                            <i class="fas fa-times"></i> Clear Section
+                        </button>
+                    </div>
+                </section>
+
+                <section class="photo-section" data-section-id="wifi">
+                    <div class="section-header">
+                        <h2><i class="fas fa-wifi"></i> WiFi</h2>
+                        <div class="status status-pending">Pending</div>
+                    </div>
+                    <div class="photo-grid">
+                        <div class="photo-upload">
+                            <div class="photo-label">Wi-Fi S.No.</div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                class="file-input"
+                                id="wifi"
+                                data-photo-type="Wi-Fi S.No."
+                            />
+                            <label for="wifi" class="file-label">
+                                <i class="fas fa-camera"></i>
+                                <span>Tap to capture</span>
+                            </label>
+                            <div class="preview-container">
+                                <img class="preview" />
+                                <button class="remove-btn"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="section-controls">
+                        <button class="btn btn-primary btn-sm submit-section" data-section-id="wifi">
+                            <i class="fas fa-upload"></i> Submit Section
+                        </button>
+                        <button class="btn btn-danger btn-sm clear-section">
+                            <i class="fas fa-times"></i> Clear Section
+                        </button>
+                    </div>
+                </section>
+                <section class="photo-section" data-section-id="tightness">
+                    <div class="section-header">
+                        <h2><i class="fas fa-wrench"></i> Tightness Photos</h2>
+                        <div class="status status-pending">Pending</div>
+                    </div>
+                    <div class="photo-grid">
+                        <div class="photo-upload">
+                            <div class="photo-label">Structure Tightness</div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                class="file-input"
+                                id="tightnessStructure"
+                                data-photo-type="Structure Tightness"
+                            />
+                            <label for="tightnessStructure" class="file-label">
+                                <i class="fas fa-camera"></i>
+                                <span>Tap to capture</span>
+                            </label>
+                            <div class="preview-container">
+                                <img class="preview" />
+                                <button class="remove-btn"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        <div class="photo-upload">
+                            <div class="photo-label">Module Tightness</div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                class="file-input"
+                                id="tightnessModule"
+                                data-photo-type="Module Tightness"
+                            />
+                            <label for="tightnessModule" class="file-label">
+                                <i class="fas fa-camera"></i>
+                                <span>Tap to capture</span>
+                            </label>
+                            <div class="preview-container">
+                                <img class="preview" />
+                                <button class="remove-btn"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        <div class="photo-upload">
+                            <div class="photo-label">MC4 Connector Tightness</div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                class="file-input"
+                                id="tightnessMC4"
+                                data-photo-type="MC4 Connector Tightness"
+                            />
+                            <label for="tightnessMC4" class="file-label">
+                                <i class="fas fa-camera"></i>
+                                <span>Tap to capture</span>
+                            </label>
+                            <div class="preview-container">
+                                <img class="preview" />
+                                <button class="remove-btn"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        <div class="photo-upload">
+                            <div class="photo-label">Base Plate</div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                class="file-input"
+                                id="tightnessBase"
+                                data-photo-type="Base Plate"
+                            />
+                            <label for="tightnessBase" class="file-label">
+                                <i class="fas fa-camera"></i>
+                                <span>Tap to capture</span>
+                            </label>
+                            <div class="preview-container">
+                                <img class="preview" />
+                                <button class="remove-btn"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="section-controls">
+                        <button class="btn btn-primary btn-sm submit-section" data-section-id="tightness">
+                            <i class="fas fa-upload"></i> Submit Section
+                        </button>
+                        <button class="btn btn-danger btn-sm clear-section">
+                            <i class="fas fa-times"></i> Clear Section
+                        </button>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <footer>
+            <p>© 2025 Kamn Enterprises - Tata Solar Authorised Channel Partner</p>
+            <p>UpNeda Registered Vendor | Solar Energy Solutions</p>
+        </footer>
+    </div>
+
+    <script src="./js/script.js"></script> </body>
+</html>
