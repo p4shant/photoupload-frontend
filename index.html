@@ -67,6 +67,9 @@
                         <button class="btn btn-primary btn-sm" id="createCustomerBtn">
                             <i class="fa-solid fa-plus"></i> Create
                         </button>
+                        <button class="btn btn-success btn-sm hidden" id="saveCustomerBtn">
+                            <i class="fas fa-save"></i> Save
+                        </button>
                         <button class="btn btn-info btn-sm" id="addExistingCustomerBtn">
                             <i class="fa-solid fa-folder-plus"></i> Add Existing
                         </button>
@@ -82,8 +85,33 @@
                     <p><strong>Plant Type:</strong> <span id="displayPlantType"></span></p>
                     <p><strong>Mobile:</strong> <span id="displayMobile"></span></p>
                 </div>
+                <div class="customer-extra">
+                    <div class="form-group">
+                        <label>Technician</label>
+                        <select id="technicianSelect">
+                            <option value="">Select technician</option>
+                            <option>Dharmaveer</option>
+                            <option>kamlesh</option>
+                            <option>Rahul</option>
+                            <option>Santosh</option>
+                        </select>
+                        <div class="current-tech">Working: <span id="displayTechnician">-</span></div>
+                    </div>
+                    <div class="form-group panel-serials">
+                        <label>Panel Serial Numbers</label>
+                        <div id="panelSerialsContainer"></div>
+                        <div class="panel-serial-controls">
+                            <button class="btn btn-secondary btn-sm" id="scanQrBtn">Scan QR</button>
+                            <div id="qrScanner" class="hidden"></div>
+                        </div>
+                        <small id="panelSerialsHint" class="hint">Scan QR to add serials. Count depends on plant type.</small>
+                    </div>
+                </div>
                 <button class="btn btn-secondary btn-sm" id="changeCustomerBtn">
                     <i class="fas fa-edit"></i> Change Customer
+                </button>
+                <button class="btn btn-primary btn-sm" id="editCustomerBtn">
+                    <i class="fas fa-user-pen"></i> Edit Details
                 </button>
             </section>
 
@@ -170,6 +198,25 @@
                                 <button class="remove-btn"><i class="fas fa-times"></i></button>
                             </div>
                         </div>
+                        <div class="photo-upload">
+                            <div class="photo-label">Panel Earthing</div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                class="file-input"
+                                id="modulePanelEarthing"
+                                data-photo-type="Panel Earthing"
+                            />
+                            <label for="modulePanelEarthing" class="file-label">
+                                <i class="fas fa-camera"></i>
+                                <span>Tap to capture</span>
+                            </label>
+                            <div class="preview-container">
+                                <img class="preview" />
+                                <button class="remove-btn"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
                     </div>
                     <div class="section-controls">
                         <button class="btn btn-primary btn-sm submit-section" data-section-id="module">
@@ -214,7 +261,7 @@
                                 capture="environment"
                                 class="file-input"
                                 id="inverterPhoto"
-                                data-photo-type="Inverter Photo"
+                                data-photo-type="Inverter Earthing"
                             />
                             <label for="inverterPhoto" class="file-label">
                                 <i class="fas fa-camera"></i>
@@ -362,7 +409,7 @@
                                 capture="environment"
                                 class="file-input"
                                 id="earthing3"
-                                data-photo-type="Internal Earthing 2"
+                                data-photo-type="Internal Earthing 3"
                             />
                             <label for="earthing3" class="file-label">
                                 <i class="fas fa-camera"></i>
@@ -399,7 +446,7 @@
                                 capture="environment"
                                 class="file-input"
                                 id="acdbInternal"
-                                data-photo-type="ACDB Internal"
+                                data-photo-type="ACDB Internal with Lug & sleeve"
                             />
                             <label for="acdbInternal" class="file-label">
                                 <i class="fas fa-camera"></i>
@@ -410,25 +457,6 @@
                                 <button class="remove-btn"><i class="fas fa-times"></i></button>
                             </div>
                         </div>
-                        <!-- <div class="photo-upload">
-                            <div class="photo-label">ACDB External</div>
-                            <input
-                                type="file"
-                                accept="image/*"
-                                capture="environment"
-                                class="file-input"
-                                id="acdbExternal"
-                                data-photo-type="ACDB External"
-                            />
-                            <label for="acdbExternal" class="file-label">
-                                <i class="fas fa-camera"></i>
-                                <span>Tap to capture</span>
-                            </label>
-                            <div class="preview-container">
-                                <img class="preview" />
-                                <button class="remove-btn"><i class="fas fa-times"></i></button>
-                            </div>
-                        </div> -->
                     </div>
                     <div class="section-controls">
                         <button class="btn btn-primary btn-sm submit-section" data-section-id="acdb">
@@ -454,7 +482,7 @@
                                 capture="environment"
                                 class="file-input"
                                 id="dcdbInternal"
-                                data-photo-type="DCDB Internal"
+                                data-photo-type="DCDB Internal with Lug & sleeve"
                             />
                             <label for="dcdbInternal" class="file-label">
                                 <i class="fas fa-camera"></i>
@@ -632,5 +660,6 @@
         </footer>
     </div>
 
+    <script src="https://unpkg.com/html5-qrcode@2.3.7/minified/html5-qrcode.min.js"></script>
     <script src="./js/script.js"></script> </body>
 </html>

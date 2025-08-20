@@ -1,4 +1,4 @@
-const API_BASE_URL = "https://photoupload-rvcb.onrender.com/api"; // Update with your backend URL
+const API_BASE_URL = "http://localhost:5000/api"; // Update with your backend URL
 let currentCustomerId = null;
 const LOCAL_STORAGE_KEY = "kamnSolarFormData";
 
@@ -15,6 +15,7 @@ let formData = {
   currentCustomerId: null, // To persist the active customer ID
 };
 
+
 document.addEventListener("DOMContentLoaded", function () {
   const customerNameInput = document.getElementById("customerName");
   const districtInput = document.getElementById("district");
@@ -30,13 +31,22 @@ document.addEventListener("DOMContentLoaded", function () {
   const displayDistrict = document.getElementById("displayDistrict");
   const displayPlantType = document.getElementById("displayPlantType");
   const displayMobile = document.getElementById("displayMobile");
-  // Add address display if needed
+  const displayAddress = document.getElementById("displayAddress");
 
   const createCustomerBtn = document.getElementById("createCustomerBtn");
   const addExistingCustomerBtn = document.getElementById(
     "addExistingCustomerBtn"
   );
   const changeCustomerBtn = document.getElementById("changeCustomerBtn");
+  const editCustomerBtn = document.getElementById("editCustomerBtn");
+  const saveCustomerBtn = document.getElementById("saveCustomerBtn");
+
+  const technicianSelect = document.getElementById('technicianSelect');
+  const displayTechnician = document.getElementById('displayTechnician');
+  const panelSerialsContainer = document.getElementById('panelSerialsContainer');
+  const scanQrBtn = document.getElementById('scanQrBtn');
+  const qrScannerEl = document.getElementById('qrScanner');
+  let html5QrScanner = null;
 
   const submitAllBtn = document.getElementById("submitAll");
   const clearAllBtn = document.getElementById("clearAll");
@@ -96,14 +106,170 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Save data to local storage
   function saveToLocalStorage() {
+    console.log("Saving formData to local storage:", formData);
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(formData));
+  }
+
+  // Helper: determine required serial count by plant type
+  function serialsCountForPlant(plantType) {
+    switch (plantType) {
+      case '3kw': return 6;
+      case '4kw': return 8;
+      case '5kw': return 9;
+      case '6kw': return 11;
+      case '8kw': return 15;
+      default: return 0;
+    }
+  }
+
+  // Render panel serial inputs
+  function renderPanelSerialInputs(plantType, existingSerials) {
+    if (!panelSerialsContainer) return;
+    panelSerialsContainer.innerHTML = '';
+    const count = serialsCountForPlant(plantType);
+    for (let i = 0; i < count; i++) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'serial-row';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'serial-input';
+      input.placeholder = `Panel ${i+1} serial`;
+      input.value = (existingSerials && existingSerials[i]) ? existingSerials[i] : '';
+      input.dataset.idx = i;
+      input.addEventListener('change', onPanelSerialChange);
+      wrapper.appendChild(input);
+      panelSerialsContainer.appendChild(wrapper);
+    }
+  }
+
+  function onPanelSerialChange(e) {
+    const idx = Number(e.target.dataset.idx);
+    if (!formData.panelSerials) formData.panelSerials = [];
+    formData.panelSerials[idx] = e.target.value.trim();
+    saveToLocalStorage();
+    if (currentCustomerId) debounceSaveCustomer();
+  }
+
+  // Technician select change
+  if (technicianSelect) {
+    technicianSelect.addEventListener('change', function () {
+      const tech = technicianSelect.value;
+      if (!formData) formData = {};
+      formData.technician = tech;
+      if (displayTechnician) displayTechnician.textContent = tech || '-';
+      saveToLocalStorage();
+      if (currentCustomerId) debounceSaveCustomer();
+    });
+  }
+
+  // Debounced save of technician / panelSerials to backend
+  let saveTimeout = null;
+  function debounceSaveCustomer() {
+    if (saveTimeout) clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(async () => {
+      if (!currentCustomerId) return;
+      try {
+        const payload = Object.assign({}, formData.customer || {}, {
+          name: (formData.customer && formData.customer.name) || displayCustomerName.textContent || '',
+          district: (formData.customer && formData.customer.district) || displayDistrict.textContent || '',
+          plantType: (formData.customer && formData.customer.plantType) || displayPlantType.textContent || '',
+          mobile: (formData.customer && formData.customer.mobile) || displayMobile.textContent || '',
+          address: (formData.customer && formData.customer.address) || '',
+          technician: formData.technician || '',
+          panelSerials: formData.panelSerials || []
+        });
+        const resp = await fetch(`${API_BASE_URL}/customers/${currentCustomerId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok) throw new Error('Failed saving customer extras');
+        const updated = await resp.json();
+        // Refresh local copy
+        formData.customer = {
+          name: updated.name,
+          district: updated.district,
+          plantType: updated.plantType,
+          mobile: updated.mobile,
+          address: updated.address || ''
+        };
+        formData.technician = updated.technician || '';
+        formData.panelSerials = updated.panelSerials || [];
+        saveToLocalStorage();
+      } catch (err) {
+        console.error('Failed to save customer extras:', err);
+      }
+    }, 600);
+  }
+
+  // QR scanning: insert scanned value into next empty serial input
+  function insertScannedSerial(value) {
+    if (!panelSerialsContainer) return false;
+    const inputs = panelSerialsContainer.querySelectorAll('.serial-input');
+    for (let i = 0; i < inputs.length; i++) {
+      if (!inputs[i].value || inputs[i].value.trim() === '') {
+        inputs[i].value = value;
+        // trigger change handler
+        const evt = new Event('change', { bubbles: true });
+        inputs[i].dispatchEvent(evt);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  async function startQrScanner() {
+    if (!qrScannerEl) return;
+    qrScannerEl.classList.remove('hidden');
+    scanQrBtn.textContent = 'Stop Scanning';
+    if (html5QrScanner) return;
+    html5QrScanner = new Html5Qrcode(qrScannerEl.id);
+    try {
+      await html5QrScanner.start({ facingMode: 'environment' }, {
+        fps: 10,
+        qrbox: 250
+      }, (decodedText, decodedResult) => {
+        // Insert into next empty serial input
+        const ok = insertScannedSerial(decodedText);
+        if (ok) {
+          // optionally stop after one successful scan
+          stopQrScanner();
+        }
+      });
+    } catch (err) {
+      console.error('QR Scanner failed to start:', err);
+      qrScannerEl.classList.add('hidden');
+      scanQrBtn.textContent = 'Scan QR';
+    }
+  }
+
+  async function stopQrScanner() {
+    if (!html5QrScanner) return;
+    try {
+      await html5QrScanner.stop();
+    } catch (e) {
+      console.warn('Error stopping scanner', e);
+    }
+    html5QrScanner.clear();
+    html5QrScanner = null;
+    if (qrScannerEl) qrScannerEl.classList.add('hidden');
+    if (scanQrBtn) scanQrBtn.textContent = 'Scan QR';
+  }
+
+  if (scanQrBtn) {
+    scanQrBtn.addEventListener('click', () => {
+      if (html5QrScanner) stopQrScanner(); else startQrScanner();
+    });
   }
 
   // Load data from local storage
   function loadFromLocalStorage() {
     const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
+    // console.log("Loading formData from local storage savedData:", savedData);
     if (savedData) {
       formData = JSON.parse(savedData);
+
+      console.log("Loaded formData from local storage:", formData);
 
       // Populate customer details form (if visible)
       customerNameInput.value = formData.customer.name || "";
@@ -184,14 +350,97 @@ document.addEventListener("DOMContentLoaded", function () {
     displayPlantType.textContent = customer.plantType;
     displayMobile.textContent = customer.mobile;
     // Optionally display address if you add it to the UI
+  // Technician & panel serials display
+  if (displayTechnician) displayTechnician.textContent = (customer.technician && customer.technician.length) ? customer.technician : '-';
+  // Render serial inputs according to plant type
+  if (panelSerialsContainer) renderPanelSerialInputs(customer.plantType, customer.panelSerials || []);
 
     customerFormSection.classList.add("hidden");
     customerDisplaySection.classList.remove("hidden");
     photoSectionsContainer.classList.remove("hidden");
 
-    // Store customer ID in formData for persistence
-    formData.currentCustomerId = customer._id;
     saveToLocalStorage();
+  }
+
+  // Fetch customer from backend and populate frontend state (status, photos)
+  // If mergeLocal=true, merge local formData.photos (data URLs) with server imageUrls: prefer server URLs.
+  async function fetchCustomerFromServer(customerId, mergeLocal = false) {
+    try {
+      const resp = await fetch(`${API_BASE_URL}/customers/${customerId}`);
+      if (!resp.ok) throw new Error('Failed to fetch customer from server');
+      const customer = await resp.json();
+
+      console.log("Fetched customer from server:", customer);
+      // Update local state
+      currentCustomerId = customer._id;
+      formData.currentCustomerId = customer._id;
+      formData.customer = {
+        name: customer.name,
+        district: customer.district,
+        plantType: customer.plantType,
+        mobile: customer.mobile,
+        address: customer.address || ''
+      };
+
+      // store technician and panelSerials in formData
+      formData.technician = customer.technician || '';
+      formData.panelSerials = customer.panelSerials || [];
+
+      // Build backendSections from server
+      const backendSections = {};
+      ["module", "inverter", "la", "earthing", "acdb", "dcdb", "wifi", "tightness"].forEach((sectionKey) => {
+        if (customer[sectionKey]) {
+          backendSections[sectionKey] = {
+            status: customer[sectionKey].status,
+            photos: customer[sectionKey].photos
+          };
+        }
+      });
+
+      // Merge local photos with server photos
+      const mergedPhotos = {};
+      // Start with server images (authoritative for uploaded photos)
+      Object.keys(backendSections).forEach((sectionId) => {
+        const sectionPhotos = backendSections[sectionId].photos || [];
+        sectionPhotos.forEach((photo) => {
+          if (!mergedPhotos[sectionId]) mergedPhotos[sectionId] = {};
+          if (photo.imageUrl) mergedPhotos[sectionId][photo.title] = photo.imageUrl;
+        });
+      });
+
+      // If mergeLocal, prefer server URLs but keep local data URLs where server lacks them
+      if (mergeLocal && formData.photos) {
+        Object.keys(formData.photos).forEach((sectionId) => {
+          const sectionObj = formData.photos[sectionId];
+          Object.keys(sectionObj).forEach((title) => {
+            const val = sectionObj[title];
+            const isDataUrl = typeof val === 'string' && val.startsWith('data:');
+            if (!mergedPhotos[sectionId]) mergedPhotos[sectionId] = {};
+            // If server already has a URL for this title, keep it; otherwise keep local (data URL)
+            if (!mergedPhotos[sectionId][title]) {
+              mergedPhotos[sectionId][title] = val;
+            } else {
+              // server has value, keep server (no-op)
+            }
+          });
+        });
+      }
+
+      // If not merging, replace with server images only
+      formData.backendSections = backendSections;
+      formData.photos = mergedPhotos;
+
+  // ensure technician and serials are reflected in UI
+  if (technicianSelect) technicianSelect.value = formData.technician || '';
+  if (displayTechnician) displayTechnician.textContent = formData.technician || '-';
+  if (panelSerialsContainer) renderPanelSerialInputs(formData.customer.plantType, formData.panelSerials || []);
+
+      saveToLocalStorage();
+      displayCustomerDetails(customer);
+      updateSectionStatuses();
+    } catch (err) {
+      console.error('Error fetching customer from server:', err);
+    }
   }
 
   // Hide customer details and show form
@@ -223,29 +472,49 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Update section statuses based on formData
   function updateSectionStatuses() {
-    document.querySelectorAll(".photo-section").forEach((section) => {
-      const sectionId = section.dataset.sectionId;
-      const statusDiv = section.querySelector(".status");
-      const inputsInSection = section.querySelectorAll(".file-input");
-      let allPhotosPresent = true;
-      // Only set to pending if not completed
-      if (statusDiv && !statusDiv.classList.contains("status-completed")) {
-        inputsInSection.forEach((input) => {
-          if (!(input.files && input.files[0])) {
-            allPhotosPresent = false;
+    // If we have loaded a customer from backend, use backend status
+    if (formData.customer && formData.currentCustomerId && formData.backendSections) {
+      document.querySelectorAll(".photo-section").forEach((section) => {
+        const sectionId = section.dataset.sectionId;
+        const statusDiv = section.querySelector(".status");
+        const backendSection = formData.backendSections[sectionId];
+        if (statusDiv && backendSection) {
+          if (backendSection.status === "completed") {
+            statusDiv.classList.remove("status-pending");
+            statusDiv.classList.add("status-completed");
+            statusDiv.textContent = "Completed";
+          } else {
+            statusDiv.classList.remove("status-completed");
+            statusDiv.classList.add("status-pending");
+            statusDiv.textContent = "Pending";
           }
-        });
-        if (allPhotosPresent && inputsInSection.length > 0) {
-          statusDiv.classList.remove("status-pending");
-          statusDiv.textContent = "Pending";
-          statusDiv.classList.add("status-pending");
-        } else {
-          statusDiv.classList.remove("status-completed");
-          statusDiv.textContent = "Pending";
-          statusDiv.classList.add("status-pending");
         }
-      }
-    });
+      });
+    } else {
+      // Fallback: local logic
+      document.querySelectorAll(".photo-section").forEach((section) => {
+        const sectionId = section.dataset.sectionId;
+        const statusDiv = section.querySelector(".status");
+        const inputsInSection = section.querySelectorAll(".file-input");
+        let allPhotosPresent = true;
+        if (statusDiv && !statusDiv.classList.contains("status-completed")) {
+          inputsInSection.forEach((input) => {
+            if (!(input.files && input.files[0])) {
+              allPhotosPresent = false;
+            }
+          });
+          if (allPhotosPresent && inputsInSection.length > 0) {
+            statusDiv.classList.remove("status-pending");
+            statusDiv.textContent = "Pending";
+            statusDiv.classList.add("status-pending");
+          } else {
+            statusDiv.classList.remove("status-completed");
+            statusDiv.textContent = "Pending";
+            statusDiv.classList.add("status-pending");
+          }
+        }
+      });
+    }
   }
 
   // Event Listeners for Customer Details Inputs (for local storage persistence)
@@ -303,7 +572,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const customer = await response.json();
       currentCustomerId = customer._id;
-      displayCustomerDetails(customer);
+  // Display and then fetch authoritative backend state
+  displayCustomerDetails(customer);
+  await fetchCustomerFromServer(customer._id);
       showNotification("Customer created successfully!", "success");
       // Clear any old photo data from local storage for new customer
       formData.photos = {};
@@ -312,6 +583,81 @@ document.addEventListener("DOMContentLoaded", function () {
     } catch (error) {
       console.error("Error creating customer:", error);
       showNotification("Error creating customer: " + error.message, "error");
+    }
+  });
+
+  // Edit current customer details - show form populated and allow save
+  editCustomerBtn.addEventListener('click', function () {
+    if (!formData || !formData.customer) return;
+    // Show the form and populate fields
+    customerFormSection.classList.remove('hidden');
+    customerDisplaySection.classList.add('hidden');
+    photoSectionsContainer.classList.add('hidden');
+
+    customerNameInput.value = formData.customer.name || '';
+    districtInput.value = formData.customer.district || '';
+    plantTypeSelect.value = formData.customer.plantType || '';
+    mobileInput.value = formData.customer.mobile || '';
+    addressInput.value = formData.customer.address || '';
+
+    // Toggle buttons: hide create/add, show save
+    createCustomerBtn.classList.add('hidden');
+    addExistingCustomerBtn.classList.add('hidden');
+    saveCustomerBtn.classList.remove('hidden');
+  });
+
+  // Save updated customer details
+  saveCustomerBtn.addEventListener('click', async function () {
+    if (!currentCustomerId) {
+      showNotification('No customer selected to edit.', 'error');
+      return;
+    }
+
+    const name = customerNameInput.value.trim();
+    const district = districtInput.value.trim();
+    const plantType = plantTypeSelect.value;
+    const mobile = mobileInput.value.trim();
+    const address = addressInput.value.trim();
+
+    if (!name || !district || !plantType || !mobile || !address) {
+      showNotification('Please fill all required customer details before saving.', 'error');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/customers/${currentCustomerId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, district, plantType, mobile, address })
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to update customer');
+      }
+
+      const updated = await response.json();
+      // Update local state and UI
+      formData.customer = {
+        name: updated.name,
+        district: updated.district,
+        plantType: updated.plantType,
+        mobile: updated.mobile,
+        address: updated.address || ''
+      };
+      saveToLocalStorage();
+
+      // Reset UI toggles
+      saveCustomerBtn.classList.add('hidden');
+      createCustomerBtn.classList.remove('hidden');
+      addExistingCustomerBtn.classList.remove('hidden');
+
+      // Return to display mode and refresh backendSections
+      await fetchCustomerFromServer(currentCustomerId, true);
+      showNotification('Customer details updated successfully.', 'success');
+    } catch (err) {
+      console.error('Error updating customer:', err);
+      showNotification('Error updating customer: ' + err.message, 'error');
     }
   });
 
@@ -353,41 +699,10 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
       }
 
-      // For simplicity, take the first matching customer
-      const customer = customers[0]; // Backend returns an array, take the first one
-      console.log("in no display", customer);
-      currentCustomerId = customer._id;
-      formData.customer = {
-        // Update formData.customer with fetched data
-        name: customer.name,
-        district: customer.district,
-        plantType: customer.plantType,
-        mobile: customer.mobile,
-        address: customer.address || ""
-      };
-      displayCustomerDetails(customer); // Load existing photos for this customer into local storage
-      showNotification("Customer found and loaded!", "success");
-
-      formData.photos = {}; // Clear previous photos
-      // Iterate through all photo arrays in the fetched customer object
-      const sections = [
-        "module", "inverter", "la", "earthing", "acdb", "dcdb", "wifi", "tightness"
-      ];
-      sections.forEach((sectionKey) => {
-        if (customer[sectionKey] && customer[sectionKey].photos) {
-          const sectionId = sectionKey;
-          customer[sectionKey].photos.forEach((photo) => {
-            if (photo.driveId && photo.imageUrl) {
-              if (!formData.photos[sectionId]) {
-                formData.photos[sectionId] = {};
-              }
-              formData.photos[sectionId][photo.title] = photo.imageUrl;
-            }
-          });
-        }
-      });
-      saveToLocalStorage();
-      loadFromLocalStorage(); // Re-load to update previews and statuses
+  // For simplicity, take the first matching customer and load authoritative state from backend
+  const customer = customers[0];
+  await fetchCustomerFromServer(customer._id);
+  showNotification("Customer found and loaded!", "success");
     } catch (error) {
       console.error("Error searching for customer:", error);
       showNotification(
@@ -455,31 +770,49 @@ document.addEventListener("DOMContentLoaded", function () {
       const sectionId = button.dataset.sectionId;
       const section = document.querySelector(`.photo-section[data-section-id='${sectionId}']`);
       const inputsInSection = section.querySelectorAll(".file-input");
-      console.log("inputsInSection",inputsInSection)
-      let allPhotosPresent = true;
       let photoFiles = [];
       let photoTypes = [];
+      let missingPhotos = [];
 
       // Gather all photo files and types for this section
       inputsInSection.forEach((input) => {
+        const photoType = input.dataset.photoType;
         if (input.files && input.files[0]) {
           photoFiles.push(input.files[0]);
-          photoTypes.push(input.dataset.photoType);
+          photoTypes.push(photoType);
+        } else if (formData.photos[sectionId] && formData.photos[sectionId][photoType]) {
+          // Use Data URL from local storage if file input is empty
+          const dataUrl = formData.photos[sectionId][photoType];
+          const blob = dataURLtoBlob(dataUrl);
+          photoFiles.push(blob);
+          photoTypes.push(photoType);
         } else {
-          allPhotosPresent = false;
+          missingPhotos.push(photoType);
         }
       });
 
-      if (!allPhotosPresent || photoFiles.length === 0) {
+      if (missingPhotos.length > 0 || photoFiles.length === 0) {
         showNotification("Please select all required photos before submitting this section.", "error");
         return;
       }
 
       // Prepare FormData for upload
       const formDataUpload = new FormData();
-      photoFiles.forEach((file) => formDataUpload.append("photos", file));
+      console.log("photoFiles:");
+      console.log("photoFiles:", photoFiles);
+      photoFiles.forEach((file, idx) => {
+        // If Blob, give a filename
+        console.log("photoFiles:", file);
+        if (file instanceof Blob && !(file instanceof File)) {
+          formDataUpload.append("photos", file, `${photoTypes[idx]}.jpg`);
+        } else {
+          formDataUpload.append("photos", file);
+        }
+      });
       formDataUpload.append("section", sectionId);
-      formDataUpload.append("photoTypes", photoTypes);
+      formDataUpload.append("photoTypes", JSON.stringify(photoTypes));
+      console.log(`Submitting section: ${sectionId} with photos:`, photoFiles);
+      console.log(`FormData for section ${sectionId}:`, formDataUpload);
 
       try {
         const response = await fetch(`${API_BASE_URL}/photos/${currentCustomerId}`, {
@@ -491,13 +824,22 @@ document.addEventListener("DOMContentLoaded", function () {
           showNotification(`Failed to submit section: ${JSON.stringify(error)}`, "error");
           return;
         }
-        // On success, update status to completed
-        const statusDiv = section.querySelector(".status");
-        if (statusDiv) {
-          statusDiv.classList.remove("status-pending");
-          statusDiv.classList.add("status-completed");
-          statusDiv.textContent = "Completed";
-        }
+        // On success, update backendSections status for this section
+        const result = await response.json();
+        if (!formData.backendSections) formData.backendSections = {};
+        formData.backendSections[sectionId] = {
+          status: result.status,
+          photos: result.photos
+        };
+        // Update local photo previews with Cloudinary URLs
+        if (!formData.photos[sectionId]) formData.photos[sectionId] = {};
+        result.photos.forEach((photo) => {
+          if (photo.imageUrl) {
+            formData.photos[sectionId][photo.title] = photo.imageUrl;
+          }
+        });
+        saveToLocalStorage();
+        updateSectionStatuses();
         showNotification("Section submitted successfully!", "success");
       } catch (error) {
         showNotification("Failed to submit section: " + error.message, "error");
@@ -642,6 +984,7 @@ document.addEventListener("DOMContentLoaded", function () {
   loadFromLocalStorage();
 });
 
+
 // Function to show notification (kept outside DOMContentLoaded for global access)
 function showNotification(message, type) {
   // Create notification element
@@ -668,3 +1011,4 @@ function showNotification(message, type) {
     notification.remove();
   });
 }
+

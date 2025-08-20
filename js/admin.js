@@ -1,5 +1,5 @@
 // admin.js
-const API_BASE_URL = 'https://photoupload-rvcb.onrender.com/api'; // Change to your backend URL
+const API_BASE_URL = 'http://localhost:5000/api'; // Change to your backend URL
 
 document.addEventListener('DOMContentLoaded', function() {
     // Admin login
