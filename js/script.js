@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://localhost:5000/api"; // Update with your backend URL
+const API_BASE_URL = "https://photoupload-rvcb.onrender.com/api"; // Update with your backend URL
 let currentCustomerId = null;
 const LOCAL_STORAGE_KEY = "kamnSolarFormData";
 
