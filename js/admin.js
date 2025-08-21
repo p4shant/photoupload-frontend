@@ -1,5 +1,5 @@
 // admin.js
-const API_BASE_URL = 'https://photoupload-rvcb.onrender.com/api'; // Change to your backend URL
+const API_BASE_URL = 'http://localhost:5000/api'; // Change to your backend URL
 
 document.addEventListener('DOMContentLoaded', function() {
     // Admin login
@@ -19,9 +19,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (response.ok) {
                 document.getElementById('loginPage').style.display = 'none';
                 document.getElementById('adminPanel').style.display = 'block';
-                
-                // Load customer data
-                // loadCustomerData();
+                // Fetch and show the latest customer in the admin panel if container exists
+                await fetchAndRenderLatestCustomer();
             } else {
                 const error = await response.json();
                 showNotification(error.error || 'Invalid credentials!', 'error');
@@ -92,12 +91,38 @@ document.addEventListener('DOMContentLoaded', function() {
             resultsGrid.innerHTML = `<div class="error">Error loading data: ${error.message}</div>`;
         }
     }
+
+    // Fetch and render latest customer helper
+    async function fetchAndRenderLatestCustomer() {
+        const latestContainer = document.getElementById('latestCustomer');
+        if (!latestContainer) return;
+        latestContainer.innerHTML = '<div class="loading">Loading latest customer...</div>';
+        try {
+            const resp = await fetch(`${API_BASE_URL}/customers/latest`);
+            if (!resp.ok) {
+                latestContainer.innerHTML = '<div class="no-results">No latest customer</div>';
+                return;
+            }
+            const customer = await resp.json();
+            // Basic validation of returned object
+            if (!customer || !customer._id) {
+                latestContainer.innerHTML = '<div class="no-results">No latest customer</div>';
+                return;
+            }
+            latestContainer.innerHTML = '';
+            const card = createCustomerCard(customer);
+            latestContainer.appendChild(card);
+        } catch (err) {
+            console.warn('Failed to fetch latest customer:', err);
+            latestContainer.innerHTML = '<div class="error">Failed to load latest customer</div>';
+        }
+    }
     
     // Create customer card element
     function createCustomerCard(customer) {
         // Build sections HTML with status and all required sections
         const requiredSections = [
-            'module', 'inverter', 'la', 'earthing', 'acdb', 'dcdb', 'wifi', 'tightness'
+            'panelSerials','module', 'inverter', 'la', 'earthing', 'acdb', 'dcdb', 'wifi', 'tightness'
         ];
         let sectionsHTML = '';
         requiredSections.forEach(section => {
@@ -133,15 +158,16 @@ document.addEventListener('DOMContentLoaded', function() {
             sectionsHTML += `</div>`;
         });
         
-        const card = document.createElement('div');
+    const card = document.createElement('div');
         card.className = 'customer-card';
         card.innerHTML = `
             <div class="customer-header">
                 <h3>${customer.name}</h3>
-                <p>${customer.district} | ${customer.plantType} System</p>
+        <p>${customer.district} | ${customer.plantType} System</p>
             </div>
             <div class="customer-body">
                 <p><i class="fas fa-phone"></i> ${customer.mobile}</p>
+        <p><i class="fas fa-user"></i> Technician: ${customer.technician || '-'}</p>
                 <p><i class="fas fa-map-marker-alt"></i> ${customer.address || ''}</p>
                 <p><i class="fas fa-calendar"></i> Created: ${new Date(customer.createdAt).toLocaleDateString()}</p>
                 ${sectionsHTML}

@@ -1,6 +1,147 @@
-const API_BASE_URL = "https://photoupload-rvcb.onrender.com/api"; // Update with your backend URL
+const API_BASE_URL = "http://localhost:5000/api"; // Update with your backend URL
 let currentCustomerId = null;
 const LOCAL_STORAGE_KEY = "kamnSolarFormData";
+
+// Geolocation utility functions
+async function getCurrentLocation() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('Geolocation is not supported by this browser'));
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const locationData = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          timestamp: new Date().toISOString()
+        };
+        
+        // Get address from coordinates
+        try {
+          const address = await getAddressFromCoordinates(
+            locationData.latitude, 
+            locationData.longitude
+          );
+          locationData.address = address;
+        } catch (error) {
+          console.warn('Failed to get address:', error);
+          locationData.address = `${locationData.latitude.toFixed(6)}, ${locationData.longitude.toFixed(6)}`;
+        }
+        
+        resolve(locationData);
+      },
+      (error) => {
+        console.warn('Geolocation error:', error.message);
+        // Return null instead of rejecting to allow photo capture without location
+        resolve(null);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,  // Increased timeout for address lookup
+        maximumAge: 300000 // 5 minutes
+      }
+    );
+  });
+}
+
+async function getAddressFromCoordinates(lat, lng) {
+  try {
+    // Using OpenStreetMap Nominatim API for reverse geocoding (free and reliable)
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=en`,
+      {
+        headers: {
+          'User-Agent': 'SolarPlantApp/1.0'
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    if (data && data.address) {
+      // Extract relevant address components similar to reference image
+      const addr = data.address;
+      const addressParts = [];
+      
+      // Build address components
+      if (addr.house_number && addr.road) {
+        addressParts.push(`${addr.house_number}, ${addr.road}`);
+      } else if (addr.road) {
+        addressParts.push(addr.road);
+      }
+      
+      if (addr.neighbourhood || addr.suburb) {
+        addressParts.push(addr.neighbourhood || addr.suburb);
+      }
+      
+      if (addr.city || addr.town || addr.village) {
+        addressParts.push(addr.city || addr.town || addr.village);
+      }
+      
+      if (addr.state) {
+        addressParts.push(addr.state);
+      }
+      
+      if (addr.country) {
+        addressParts.push(addr.country);
+      }
+      
+      if (addr.postcode) {
+        addressParts.push(addr.postcode);
+      }
+      
+      return addressParts.length > 0 ? addressParts.join(', ') : data.display_name;
+    }
+    
+    return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+  } catch (error) {
+    console.warn('Address lookup failed:', error.message);
+    return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+  }
+}
+
+// Geolocation status indicator functions
+function showGeolocationStatus(photoUploadDiv, status, details = '') {
+  let statusDiv = photoUploadDiv.querySelector('.geolocation-status');
+  if (!statusDiv) {
+    statusDiv = document.createElement('div');
+    statusDiv.className = 'geolocation-status';
+    photoUploadDiv.appendChild(statusDiv);
+  }
+  
+  // Clear previous status classes
+  statusDiv.classList.remove('capturing', 'success', 'error');
+  statusDiv.classList.add(status);
+  
+  let content = '';
+  switch (status) {
+    case 'capturing':
+      content = '<i class="fas fa-location-arrow geolocation-icon"></i> Getting location...';
+      break;
+    case 'success':
+      const shortAddress = details ? (details.length > 50 ? details.substring(0, 47) + '...' : details) : 'Location captured';
+      content = `<i class="fas fa-map-marker-alt geolocation-icon"></i> ${shortAddress}`;
+      break;
+    case 'error':
+      content = '<i class="fas fa-exclamation-triangle geolocation-icon"></i> Location unavailable';
+      break;
+  }
+  statusDiv.innerHTML = content;
+}
+
+function hideGeolocationStatus(photoUploadDiv) {
+  const statusDiv = photoUploadDiv.querySelector('.geolocation-status');
+  if (statusDiv) {
+    statusDiv.style.display = 'none';
+  }
+}
 
 // Data structure to hold form data and photo URLs
 let formData = {
@@ -11,7 +152,8 @@ let formData = {
     mobile: "",
     address: ""
   },
-  photos: {}, // { sectionId: { photoType: dataURL,... },... }
+  photos: {}, // { sectionId: { photoType: { dataURL, geolocation },... },... }
+  geolocations: {}, // { sectionId: { photoType: geolocationData,... },... }
   currentCustomerId: null, // To persist the active customer ID
 };
 
@@ -43,10 +185,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const technicianSelect = document.getElementById('technicianSelect');
   const displayTechnician = document.getElementById('displayTechnician');
-  const panelSerialsContainer = document.getElementById('panelSerialsContainer');
-  const scanQrBtn = document.getElementById('scanQrBtn');
-  const qrScannerEl = document.getElementById('qrScanner');
-  let html5QrScanner = null;
+  const panelSerialsGrid = document.getElementById('panelSerialsGrid');
 
   const submitAllBtn = document.getElementById("submitAll");
   const clearAllBtn = document.getElementById("clearAll");
@@ -110,7 +249,7 @@ document.addEventListener("DOMContentLoaded", function () {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(formData));
   }
 
-  // Helper: determine required serial count by plant type
+  // Helper: determine required panel photo count by plant type
   function serialsCountForPlant(plantType) {
     switch (plantType) {
       case '3kw': return 6;
@@ -122,32 +261,133 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // Render panel serial inputs
-  function renderPanelSerialInputs(plantType, existingSerials) {
-    if (!panelSerialsContainer) return;
-    panelSerialsContainer.innerHTML = '';
+  // Render panel serial photo inputs inside #panelSerialsGrid
+  function renderPanelSerialPhotoInputs(plantType, backendPhotos) {
+    if (!panelSerialsGrid) return;
+    panelSerialsGrid.innerHTML = '';
     const count = serialsCountForPlant(plantType);
     for (let i = 0; i < count; i++) {
       const wrapper = document.createElement('div');
-      wrapper.className = 'serial-row';
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.className = 'serial-input';
-      input.placeholder = `Panel ${i+1} serial`;
-      input.value = (existingSerials && existingSerials[i]) ? existingSerials[i] : '';
-      input.dataset.idx = i;
-      input.addEventListener('change', onPanelSerialChange);
-      wrapper.appendChild(input);
-      panelSerialsContainer.appendChild(wrapper);
-    }
-  }
+      wrapper.className = 'photo-upload';
 
-  function onPanelSerialChange(e) {
-    const idx = Number(e.target.dataset.idx);
-    if (!formData.panelSerials) formData.panelSerials = [];
-    formData.panelSerials[idx] = e.target.value.trim();
-    saveToLocalStorage();
-    if (currentCustomerId) debounceSaveCustomer();
+      const labelDiv = document.createElement('div');
+      labelDiv.className = 'photo-label';
+      labelDiv.textContent = `Panel S.No. ${i+1}`;
+
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.capture = 'environment';
+      input.className = 'file-input';
+      input.id = `panelSerial_${i}`;
+      input.dataset.sectionId = 'panelSerials';
+      input.dataset.photoType = `Panel S.No. ${i+1}`;
+
+      const fileLabel = document.createElement('label');
+      fileLabel.htmlFor = input.id;
+      fileLabel.className = 'file-label';
+      fileLabel.innerHTML = `<i class="fas fa-camera"></i><span>Tap to capture</span>`;
+
+      const previewContainer = document.createElement('div');
+      previewContainer.className = 'preview-container';
+      const img = document.createElement('img');
+      img.className = 'preview';
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'remove-btn';
+      removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+      removeBtn.addEventListener('click', () => {
+        input.value = '';
+        img.src = '';
+        previewContainer.style.display = 'none';
+  // Restore the capture placeholder when preview is removed
+  fileLabel.style.display = 'flex';
+        if (formData.photos && formData.photos['panelSerials']) {
+          delete formData.photos['panelSerials'][input.dataset.photoType];
+          if (Object.keys(formData.photos['panelSerials']).length === 0) delete formData.photos['panelSerials'];
+        }
+        if (formData.geolocations && formData.geolocations['panelSerials']) {
+          delete formData.geolocations['panelSerials'][input.dataset.photoType];
+          if (Object.keys(formData.geolocations['panelSerials']).length === 0) delete formData.geolocations['panelSerials'];
+        }
+        saveToLocalStorage();
+        updateSectionStatuses();
+      });
+
+      previewContainer.appendChild(img);
+      previewContainer.appendChild(removeBtn);
+
+      wrapper.appendChild(labelDiv);
+      wrapper.appendChild(input);
+      wrapper.appendChild(fileLabel);
+      wrapper.appendChild(previewContainer);
+
+      // If backendPhotos provided, show URL
+      const existingUrl = backendPhotos && backendPhotos[i] ? backendPhotos[i].imageUrl : null;
+      if (existingUrl) {
+        if (!formData.photos) formData.photos = {};
+        if (!formData.photos['panelSerials']) formData.photos['panelSerials'] = {};
+        formData.photos['panelSerials'][`Panel S.No. ${i+1}`] = existingUrl;
+        img.src = existingUrl;
+  // Show preview and hide the capture placeholder
+  previewContainer.style.display = 'block';
+  fileLabel.style.display = 'none';
+      }
+
+      input.addEventListener('change', async (event) => {
+        const file = event.target.files[0];
+        if (file) {
+          const photoUploadDiv = input.closest('.photo-upload');
+          
+          // Show geolocation capturing status
+          showGeolocationStatus(photoUploadDiv, 'capturing');
+          fileLabel.classList.add('capturing');
+          
+          // Show notification about location capture
+          showNotification("📍 Capturing location data for photo...", "info");
+          
+          // Capture geolocation when photo is taken
+          const geolocation = await getCurrentLocation();
+          
+          // Update geolocation status based on result
+          if (geolocation) {
+            showGeolocationStatus(photoUploadDiv, 'success', geolocation.address);
+            showNotification(`📍 Location captured: ${geolocation.address}`, "success");
+          } else {
+            showGeolocationStatus(photoUploadDiv, 'error');
+            showNotification("⚠️ Location unavailable - photo saved without location", "info");
+          }
+          
+          fileLabel.classList.remove('capturing');
+          
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const dataUrl = e.target.result;
+            if (!formData.photos) formData.photos = {};
+            if (!formData.photos['panelSerials']) formData.photos['panelSerials'] = {};
+            if (!formData.geolocations) formData.geolocations = {};
+            if (!formData.geolocations['panelSerials']) formData.geolocations['panelSerials'] = {};
+            
+            formData.photos['panelSerials'][input.dataset.photoType] = dataUrl;
+            formData.geolocations['panelSerials'][input.dataset.photoType] = geolocation;
+            
+            saveToLocalStorage();
+            img.src = dataUrl;
+            // Show preview and hide the capture placeholder
+            previewContainer.style.display = 'block';
+            fileLabel.style.display = 'none';
+            updateSectionStatuses();
+            
+            // Hide geolocation status after preview is shown
+            setTimeout(() => {
+              hideGeolocationStatus(photoUploadDiv);
+            }, 5000); // Increased to 5 seconds for address visibility
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+
+      panelSerialsGrid.appendChild(wrapper);
+    }
   }
 
   // Technician select change
@@ -175,8 +415,7 @@ document.addEventListener("DOMContentLoaded", function () {
           plantType: (formData.customer && formData.customer.plantType) || displayPlantType.textContent || '',
           mobile: (formData.customer && formData.customer.mobile) || displayMobile.textContent || '',
           address: (formData.customer && formData.customer.address) || '',
-          technician: formData.technician || '',
-          panelSerials: formData.panelSerials || []
+          technician: formData.technician || ''
         });
         const resp = await fetch(`${API_BASE_URL}/customers/${currentCustomerId}`, {
           method: 'PUT',
@@ -193,8 +432,7 @@ document.addEventListener("DOMContentLoaded", function () {
           mobile: updated.mobile,
           address: updated.address || ''
         };
-        formData.technician = updated.technician || '';
-        formData.panelSerials = updated.panelSerials || [];
+  formData.technician = updated.technician || '';
         saveToLocalStorage();
       } catch (err) {
         console.error('Failed to save customer extras:', err);
@@ -202,65 +440,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }, 600);
   }
 
-  // QR scanning: insert scanned value into next empty serial input
-  function insertScannedSerial(value) {
-    if (!panelSerialsContainer) return false;
-    const inputs = panelSerialsContainer.querySelectorAll('.serial-input');
-    for (let i = 0; i < inputs.length; i++) {
-      if (!inputs[i].value || inputs[i].value.trim() === '') {
-        inputs[i].value = value;
-        // trigger change handler
-        const evt = new Event('change', { bubbles: true });
-        inputs[i].dispatchEvent(evt);
-        return true;
-      }
-    }
-    return false;
-  }
-
-  async function startQrScanner() {
-    if (!qrScannerEl) return;
-    qrScannerEl.classList.remove('hidden');
-    scanQrBtn.textContent = 'Stop Scanning';
-    if (html5QrScanner) return;
-    html5QrScanner = new Html5Qrcode(qrScannerEl.id);
-    try {
-      await html5QrScanner.start({ facingMode: 'environment' }, {
-        fps: 10,
-        qrbox: 250
-      }, (decodedText, decodedResult) => {
-        // Insert into next empty serial input
-        const ok = insertScannedSerial(decodedText);
-        if (ok) {
-          // optionally stop after one successful scan
-          stopQrScanner();
-        }
-      });
-    } catch (err) {
-      console.error('QR Scanner failed to start:', err);
-      qrScannerEl.classList.add('hidden');
-      scanQrBtn.textContent = 'Scan QR';
-    }
-  }
-
-  async function stopQrScanner() {
-    if (!html5QrScanner) return;
-    try {
-      await html5QrScanner.stop();
-    } catch (e) {
-      console.warn('Error stopping scanner', e);
-    }
-    html5QrScanner.clear();
-    html5QrScanner = null;
-    if (qrScannerEl) qrScannerEl.classList.add('hidden');
-    if (scanQrBtn) scanQrBtn.textContent = 'Scan QR';
-  }
-
-  if (scanQrBtn) {
-    scanQrBtn.addEventListener('click', () => {
-      if (html5QrScanner) stopQrScanner(); else startQrScanner();
-    });
-  }
+  // No QR scanning — panel serials are handled as photo uploads in the panelSerials section
 
   // Load data from local storage
   function loadFromLocalStorage() {
@@ -290,7 +470,7 @@ document.addEventListener("DOMContentLoaded", function () {
         photoSectionsContainer.classList.add("hidden");
       }
 
-      // Populate photo previews
+  // Populate photo previews
       photoInputs.forEach((input) => {
         const sectionId = input.dataset.sectionId;
         const photoType = input.dataset.photoType;
@@ -309,6 +489,11 @@ document.addEventListener("DOMContentLoaded", function () {
           fileLabel.style.display = "flex";
         }
       });
+      // Render dynamic panelSerials inputs if present
+      if (panelSerialsGrid) {
+        const backend = (formData.backendSections && formData.backendSections.panelSerials) ? formData.backendSections.panelSerials.photos : null;
+        renderPanelSerialPhotoInputs(formData.customer.plantType, backend);
+      }
     } else {
       // If no saved data, ensure form is visible and photo sections are hidden
       customerFormSection.classList.remove("hidden");
@@ -334,11 +519,20 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Remove from formData
     if (formData.photos[sectionId]) {
-      delete formData.photos[sectionId];
+      delete formData.photos[sectionId][photoType];
       if (Object.keys(formData.photos[sectionId]).length === 0) {
         delete formData.photos[sectionId];
       }
     }
+    
+    // Remove geolocation data
+    if (formData.geolocations && formData.geolocations[sectionId]) {
+      delete formData.geolocations[sectionId][photoType];
+      if (Object.keys(formData.geolocations[sectionId]).length === 0) {
+        delete formData.geolocations[sectionId];
+      }
+    }
+    
     saveToLocalStorage();
     updateSectionStatuses();
   }
@@ -350,10 +544,13 @@ document.addEventListener("DOMContentLoaded", function () {
     displayPlantType.textContent = customer.plantType;
     displayMobile.textContent = customer.mobile;
     // Optionally display address if you add it to the UI
-  // Technician & panel serials display
+  // Technician display
   if (displayTechnician) displayTechnician.textContent = (customer.technician && customer.technician.length) ? customer.technician : '-';
-  // Render serial inputs according to plant type
-  if (panelSerialsContainer) renderPanelSerialInputs(customer.plantType, customer.panelSerials || []);
+  // Render panel serial photo inputs according to plant type and backend photos
+  if (panelSerialsGrid) {
+    const backendPhotos = (formData.backendSections && formData.backendSections.panelSerials) ? formData.backendSections.panelSerials.photos : null;
+    renderPanelSerialPhotoInputs(customer.plantType, backendPhotos);
+  }
 
     customerFormSection.classList.add("hidden");
     customerDisplaySection.classList.remove("hidden");
@@ -382,13 +579,12 @@ document.addEventListener("DOMContentLoaded", function () {
         address: customer.address || ''
       };
 
-      // store technician and panelSerials in formData
-      formData.technician = customer.technician || '';
-      formData.panelSerials = customer.panelSerials || [];
+  // store technician in formData
+  formData.technician = customer.technician || '';
 
-      // Build backendSections from server
-      const backendSections = {};
-      ["module", "inverter", "la", "earthing", "acdb", "dcdb", "wifi", "tightness"].forEach((sectionKey) => {
+  // Build backendSections from server (include panelSerials)
+  const backendSections = {};
+  ["panelSerials","module", "inverter", "la", "earthing", "acdb", "dcdb", "wifi", "tightness"].forEach((sectionKey) => {
         if (customer[sectionKey]) {
           backendSections[sectionKey] = {
             status: customer[sectionKey].status,
@@ -430,10 +626,16 @@ document.addEventListener("DOMContentLoaded", function () {
       formData.backendSections = backendSections;
       formData.photos = mergedPhotos;
 
+      // Render dynamic panelSerials inputs now that we have backend info
+      if (panelSerialsGrid) {
+        const backend = backendSections.panelSerials ? backendSections.panelSerials.photos : null;
+        renderPanelSerialPhotoInputs(formData.customer.plantType, backend);
+      }
+
   // ensure technician and serials are reflected in UI
   if (technicianSelect) technicianSelect.value = formData.technician || '';
   if (displayTechnician) displayTechnician.textContent = formData.technician || '-';
-  if (panelSerialsContainer) renderPanelSerialInputs(formData.customer.plantType, formData.panelSerials || []);
+  // panel serials are rendered as photo inputs via renderPanelSerialPhotoInputs
 
       saveToLocalStorage();
       displayCustomerDetails(customer);
@@ -451,6 +653,7 @@ document.addEventListener("DOMContentLoaded", function () {
     currentCustomerId = null;
     formData.currentCustomerId = null; // Clear from local storage data
     formData.photos = {}; // Clear photos from local storage when changing customer
+    formData.geolocations = {}; // Clear geolocations from local storage when changing customer
     saveToLocalStorage();
     // Optionally clear form fields
     customerNameInput.value = "";
@@ -717,32 +920,70 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Event Listeners for Photo Inputs
   photoInputs.forEach((input) => {
-    input.addEventListener("change", (event) => {
+    input.addEventListener("change", async (event) => {
       const file = event.target.files[0]; // Get the single file
       const sectionId = input.closest(".photo-section").dataset.sectionId;
       const photoType = input.dataset.photoType;
       const previewContainer = input.nextElementSibling.nextElementSibling;
       const previewImg = previewContainer.querySelector(".preview");
       const fileLabel = input.nextElementSibling;
+      const photoUploadDiv = input.closest(".photo-upload");
+      
       console.log(
         `file : ${file}, sectionID : ${sectionId}, photoType : ${photoType}`
       );
 
       if (file) {
+        // Show geolocation capturing status
+        showGeolocationStatus(photoUploadDiv, 'capturing');
+        fileLabel.classList.add('capturing');
+        
+        // Show notification about location capture
+        showNotification("📍 Capturing location data for photo...", "info");
+        
+        // Capture geolocation when photo is taken
+        const geolocation = await getCurrentLocation();
+        
+        // Update geolocation status based on result
+        if (geolocation) {
+          showGeolocationStatus(photoUploadDiv, 'success', geolocation.address);
+          showNotification(`📍 Location captured: ${geolocation.address}`, "success");
+        } else {
+          showGeolocationStatus(photoUploadDiv, 'error');
+          showNotification("⚠️ Location unavailable - photo saved without location", "info");
+        }
+        
+        fileLabel.classList.remove('capturing');
+        
         const reader = new FileReader();
         reader.onload = (e) => {
           const dataUrl = e.target.result;
           if (!formData.photos[sectionId]) {
             formData.photos[sectionId] = {};
           }
+          if (!formData.geolocations) {
+            formData.geolocations = {};
+          }
+          if (!formData.geolocations[sectionId]) {
+            formData.geolocations[sectionId] = {};
+          }
+          
           formData.photos[sectionId][photoType] = dataUrl; // Store specific photo type
+          formData.geolocations[sectionId][photoType] = geolocation; // Store geolocation
+          
           saveToLocalStorage();
           console.log(formData);
+          
           // Display preview
           if (previewImg) {
             previewImg.src = dataUrl;
             previewContainer.style.display = "block";
             fileLabel.style.display = "none";
+            
+            // Hide geolocation status after preview is shown
+            setTimeout(() => {
+              hideGeolocationStatus(photoUploadDiv);
+            }, 5000); // Increased to 5 seconds for address visibility
           }
           updateSectionStatuses();
         };
@@ -775,17 +1016,28 @@ document.addEventListener("DOMContentLoaded", function () {
       let missingPhotos = [];
 
       // Gather all photo files and types for this section
+      let geolocations = [];
       inputsInSection.forEach((input) => {
         const photoType = input.dataset.photoType;
         if (input.files && input.files[0]) {
           photoFiles.push(input.files[0]);
           photoTypes.push(photoType);
+          // Get geolocation for this photo
+          const geolocation = formData.geolocations && formData.geolocations[sectionId] 
+            ? formData.geolocations[sectionId][photoType] 
+            : null;
+          geolocations.push(geolocation);
         } else if (formData.photos[sectionId] && formData.photos[sectionId][photoType]) {
           // Use Data URL from local storage if file input is empty
           const dataUrl = formData.photos[sectionId][photoType];
           const blob = dataURLtoBlob(dataUrl);
           photoFiles.push(blob);
           photoTypes.push(photoType);
+          // Get geolocation for this photo
+          const geolocation = formData.geolocations && formData.geolocations[sectionId] 
+            ? formData.geolocations[sectionId][photoType] 
+            : null;
+          geolocations.push(geolocation);
         } else {
           missingPhotos.push(photoType);
         }
@@ -811,16 +1063,21 @@ document.addEventListener("DOMContentLoaded", function () {
       });
       formDataUpload.append("section", sectionId);
       formDataUpload.append("photoTypes", JSON.stringify(photoTypes));
+      formDataUpload.append("geolocations", JSON.stringify(geolocations));
       console.log(`Submitting section: ${sectionId} with photos:`, photoFiles);
+      console.log(`Geolocations for section ${sectionId}:`, geolocations);
       console.log(`FormData for section ${sectionId}:`, formDataUpload);
 
       try {
+        const notifId = `upload-section-${sectionId}`;
+        showPersistentNotification(notifId, `Uploading photos for ${sectionId}...`);
         const response = await fetch(`${API_BASE_URL}/photos/${currentCustomerId}`, {
           method: "POST",
           body: formDataUpload,
         });
         if (!response.ok) {
           const error = await response.json();
+          removePersistentNotification(notifId);
           showNotification(`Failed to submit section: ${JSON.stringify(error)}`, "error");
           return;
         }
@@ -838,11 +1095,13 @@ document.addEventListener("DOMContentLoaded", function () {
             formData.photos[sectionId][photo.title] = photo.imageUrl;
           }
         });
-        saveToLocalStorage();
-        updateSectionStatuses();
-        showNotification("Section submitted successfully!", "success");
+  removePersistentNotification(notifId);
+  saveToLocalStorage();
+  updateSectionStatuses();
+  showNotification("Section submitted successfully!", "success");
       } catch (error) {
-        showNotification("Failed to submit section: " + error.message, "error");
+  removePersistentNotification(`upload-section-${sectionId}`);
+  showNotification("Failed to submit section: " + error.message, "error");
       }
     });
   });
@@ -907,15 +1166,13 @@ document.addEventListener("DOMContentLoaded", function () {
           uploadFormData.append("photos", photoBlob, `photo_${index}.jpeg`);
         });
         uploadFormData.append("photoTypes", JSON.stringify(photoTypesToUpload));
-
+        const notifId = `upload-section-${sectionId}`;
+        showPersistentNotification(notifId, `Uploading photos for ${sectionId}...`);
         try {
-          const response = await fetch(
-            `${API_BASE_URL}/photos/${currentCustomerId}`,
-            {
-              method: "POST",
-              body: uploadFormData,
-            }
-          );
+          const response = await fetch(`${API_BASE_URL}/photos/${currentCustomerId}`, {
+            method: "POST",
+            body: uploadFormData,
+          });
 
           if (response.ok) {
             // Clear local storage for this section's photos
@@ -925,30 +1182,24 @@ document.addEventListener("DOMContentLoaded", function () {
                 delete formData.photos[sectionId];
               }
             });
-            if (
-              formData.photos[sectionId] &&
-              Object.keys(formData.photos[sectionId]).length === 0
-            ) {
+            if (formData.photos[sectionId] && Object.keys(formData.photos[sectionId]).length === 0) {
               delete formData.photos[sectionId];
             }
             saveToLocalStorage();
             updateSectionStatuses();
+            removePersistentNotification(notifId);
           } else {
             allSectionsSubmittedSuccessfully = false;
             const errorText = await response.text();
             console.error(`Failed to submit section ${sectionId}:`, errorText);
-            showNotification(
-              `Failed to submit photos for ${sectionId}.`,
-              "error"
-            );
+            removePersistentNotification(notifId);
+            showNotification(`Failed to submit photos for ${sectionId}.`, "error");
           }
         } catch (error) {
           allSectionsSubmittedSuccessfully = false;
           console.error(`Error submitting section ${sectionId}:`, error);
-          showNotification(
-            `An error occurred submitting photos for ${sectionId}.`,
-            "error"
-          );
+          removePersistentNotification(notifId);
+          showNotification(`An error occurred submitting photos for ${sectionId}.`, "error");
         }
       }
     }
@@ -1010,5 +1261,31 @@ function showNotification(message, type) {
   notification.querySelector(".close-btn").addEventListener("click", () => {
     notification.remove();
   });
+}
+
+// Show a persistent notification (returns id used to remove it)
+function showPersistentNotification(id, message) {
+  // If exists, update text
+  let existing = document.getElementById(id);
+  if (existing) {
+    existing.querySelector('div').textContent = message;
+    return id;
+  }
+  const notification = document.createElement('div');
+  notification.className = `notification info`;
+  notification.id = id;
+  notification.innerHTML = `
+        <div>${message}</div>
+        <button class="close-btn"><i class="fas fa-times"></i></button>
+    `;
+  // Close button removes it
+  notification.querySelector('.close-btn').addEventListener('click', () => notification.remove());
+  document.body.appendChild(notification);
+  return id;
+}
+
+function removePersistentNotification(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
 }
 

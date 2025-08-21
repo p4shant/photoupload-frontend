@@ -63,10 +63,21 @@
                 </div>
             </section>
             
+            <!-- Latest customer quick view (populated after admin login) -->
+            <section id="latestCustomerContainer" style="margin-bottom:20px;">
+                <h2 style="margin-bottom: 12px; color: var(--primary);">
+                    <i class="fas fa-clock"></i> Latest Customer
+                </h2>
+                <div id="latestCustomer">
+                    <!-- Latest customer card will be inserted here by admin.js -->
+                    <div class="no-results">No latest customer</div>
+                </div>
+            </section>
+
             <h2 style="margin-bottom: 20px; color: var(--primary);">
                 <i class="fas fa-list"></i> Customer Records
             </h2>
-            
+
             <div class="results-grid" id="resultsGrid">
                 <!-- Customer Cards will be dynamically added here -->
             </div>

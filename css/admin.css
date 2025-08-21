@@ -177,6 +177,18 @@ header {
     gap: 20px;
 }
 
+/* Latest customer quick view */
+#latestCustomerContainer {
+    background: transparent;
+}
+#latestCustomer {
+    display: block;
+    max-width: 800px;
+}
+#latestCustomer .customer-card {
+    border: 2px dashed var(--primary);
+}
+
 .customer-card {
     background: white;
     border-radius: 10px;
